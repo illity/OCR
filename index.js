@@ -4,7 +4,7 @@ const worker = await Tesseract.createWorker("eng", 1, {
 });
 
 
-function cropImageAndReturnFile(file, cropX, cropY, cropWidth, cropHeight) {
+function cropImageAndReturnFile(file, cropXPercentage, cropY, cropWidthPercentage, cropHeight) {
     return new Promise((resolve, reject) => {
         var reader = new FileReader();
 
@@ -14,15 +14,18 @@ function cropImageAndReturnFile(file, cropX, cropY, cropWidth, cropHeight) {
                 var canvas = document.createElement('canvas');
                 var ctx = canvas.getContext('2d');
 
+                // Calculate cropX based on percentage
+                var cropX = img.width * cropXPercentage / 100;
+
+                // Calculate cropWidth based on percentage
+                var cropWidth = img.width * cropWidthPercentage / 100;
+
                 // Set canvas dimensions to match the crop size
                 canvas.width = cropWidth;
                 canvas.height = cropHeight;
 
                 // Draw the cropped portion of the image onto the canvas
                 ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-                //if want to see image
-                //document.body.append(canvas)
 
                 // Convert the canvas content back to a Blob object (file)
                 canvas.toBlob(function (blob) {
@@ -47,79 +50,107 @@ var data = []
 
 
 const recognize = async function (evt) {
-
-
     const files = evt.target.files;
-    Tesseract.rectangle
 
     for (let i = 0; i < files.length; i++) {
-        const [result, result2] = await Promise.all([
-            worker.recognize(files[i], {
-                rectangle: {
-                    top: 160,
-                    left: 0,
-                    width: 400,
-                    height: 1040,
-                },
-            }).then(response => {
-                return response.data.lines.map(x => x.text)
-                    .map(str => str.replace(/[\s\n]/g, ''))
-                    .reduce((acc, curr, index, array) => index % 2 === 0 ? [...acc, { name: curr, date: array[index + 1] }] : acc, []);
-            }),
-            worker.recognize(files[i], {
-                rectangle: {
-                    top: 160,
-                    left: 400,
-                    width: 150,
-                    height: 1040,
-                },
-            }).then(response => {
-                return response.data.lines.map(x => x.text)
-                    .map(str => str.replace(/[\s\nRS$,-]/g, ''))
-                    .map(v=>v/100)  ;
-            })
-        ]);
+        const file = files[i];
+        
+        const reader = new FileReader();
+        reader.onload = async function (event) {
+            const img = new Image();
+            img.onload = async function () {
+                const imageWidth = img.width;
+                const imageHeight = img.height;
 
+                const topPercentage = 11; // top position percentage
+                const heightPercentage = 82; // height percentage
+                const leftPercentage = 0; // left position percentage
+                const widthPercentage = 70; // width percentage
 
-        const fileData = result.map((obj, index) => ({
-            name: obj.name,
-            date: obj.date,
-            value: result2[index]
-        }));
+                // Calculate top position based on percentage
+                const top = (topPercentage / 100) * imageHeight;
 
-        data = data.concat(fileData); // Concatenate the data from current file with the data
+                // Calculate height based on percentage
+                const height = (heightPercentage / 100) * imageHeight;
+
+                // Calculate left position based on percentage
+                const left = (leftPercentage / 100) * imageWidth;
+
+                // Calculate width based on percentage
+                const width = (widthPercentage / 100) * imageWidth;
+
+                const [result, result2] = await Promise.all([
+                    worker.recognize(file, {
+                        rectangle: {
+                            top: top,
+                            left: left,
+                            width: width,
+                            height: height,
+                        },
+                    }).then(response => {
+                        return response.data.lines.map(x => x.text)
+                            .map(str => str.replace(/[\s\n]/g, ''))
+                            .reduce((acc, curr, index, array) => index % 2 === 0 ? [...acc, { name: curr, date: array[index + 1] }] : acc, []);
+                    }),
+                    worker.recognize(file, {
+                        rectangle: {
+                            top: top,
+                            left: left + width,
+                            width: imageWidth - width,
+                            height: height,
+                        },
+                    }).then(response => {
+                        return response.data.lines.map(x => x.text)
+                            .map(str => str.replace(/[\s\nRS$,-]/g, ''))
+                            .map(v=>v/100);
+                    })
+                ]);
+
+                const fileData = result.map((obj, index) => ({
+                    name: obj.name,
+                    date: obj.date,
+                    value: result2[index]
+                }));
+
+                data = data.concat(fileData); // Concatenate the data from current file with the data
+
+                function removeDuplicates(array) {
+                    const uniqueObjects = [];
+                    const keys = new Set();
+
+                    array.forEach(obj => {
+                        const key = JSON.stringify(obj);
+                        if (!keys.has(key)) {
+                            keys.add(key);
+                            uniqueObjects.push(obj);
+                        }
+                    });
+
+                    return uniqueObjects;
+                }
+                data = removeDuplicates(data);
+
+                function sortByDate(objects) {
+                    function parseDate(dateString) {
+                        var parts = dateString.split('/');
+                        return new Date(new Date().getFullYear(), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+                    }
+
+                    return objects.sort(function (a, b) {
+                        var dateA = parseDate(a.date);
+                        var dateB = parseDate(b.date);
+                        return dateA - dateB;
+                    });
+                }
+                data = sortByDate(data);
+                createTable(data);
+            };
+            img.src = event.target.result;
+        };
+
+        reader.readAsDataURL(file);
     }
-    function removeDuplicates(array) {
-        const uniqueObjects = [];
-        const keys = new Set();
-
-        array.forEach(obj => {
-            const key = JSON.stringify(obj);
-            if (!keys.has(key)) {
-                keys.add(key);
-                uniqueObjects.push(obj);
-            }
-        });
-
-        return uniqueObjects;
-    }
-    data = removeDuplicates(data);
-
-    function sortByDate(objects) {
-        function parseDate(dateString) {
-            var parts = dateString.split('/');
-            return new Date(new Date().getFullYear(), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-        }
-
-        return objects.sort(function (a, b) {
-            var dateA = parseDate(a.date);
-            var dateB = parseDate(b.date);
-            return dateA - dateB;
-        });
-    }
-    data = sortByDate(data);
-    createTable(data)
-}
+};
 
 
 
