@@ -169,6 +169,8 @@ function createTable(objects) {
             headerCell.textContent = key.toUpperCase(); // Convert to uppercase
         }
     }
+    var excludeHeaderCell = headerRow.insertCell();
+    excludeHeaderCell.textContent = "EXCLUDE"; // Header for the exclude column
 
     // Initialize total value
     var totalValue = 0;
@@ -176,8 +178,8 @@ function createTable(objects) {
     // Create table rows
     for (var i = 0; i < objects.length; i++) {
         var row = table.insertRow();
-        var isExcluded = objects[i].name.includes("CARREFOUR") || objects[i].name.includes("DONA") || objects[i].name.includes("Disponi");
-
+        
+        // Add cells for each object property
         for (var key in objects[i]) {
             if (objects[i].hasOwnProperty(key)) {
                 var cell = row.insertCell();
@@ -185,13 +187,24 @@ function createTable(objects) {
             }
         }
 
-        // Apply strikethrough style if the name contains "CARREFOUR" or "DONA"
-        if (isExcluded) {
-            row.style.textDecoration = "line-through";
-        } else {
-            // Add value to total if it's not "CARREFOUR" or "DONA"
-            totalValue += parseFloat(objects[i].value || 0);
-        }
+        // Add checkbox cell for excluding item
+        var excludeCell = row.insertCell();
+        var excludeCheckbox = document.createElement('input');
+        excludeCheckbox.type = 'checkbox';
+        
+        excludeCheckbox.addEventListener('change', function(event) {
+            // Get the row corresponding to the clicked checkbox
+            var clickedRow = event.target.parentElement.parentElement;
+            // Apply strikethrough style based on checkbox status
+            clickedRow.style.textDecoration = this.checked ? "line-through" : "none";
+            // Recalculate total value
+            calculateTotal();
+        });
+
+        excludeCell.appendChild(excludeCheckbox);
+
+        // Add value to total if it's not initially excluded
+        totalValue += parseFloat(objects[i].value || 0);
     }
 
     // Add total line
@@ -204,7 +217,19 @@ function createTable(objects) {
 
     var totalValueCell = totalRow.insertCell();
     totalValueCell.textContent = totalValue.toFixed(2); // Display total with 2 decimal places
+
+    // Function to recalculate total value
+    function calculateTotal() {
+        totalValue = 0;
+        for (var j = 0; j < objects.length; j++) {
+            if (!document.getElementById('theTable').rows[j + 1].style.textDecoration.includes("line-through")) {
+                totalValue += parseFloat(objects[j].value || 0);
+            }
+        }
+        totalValueCell.textContent = totalValue.toFixed(2); // Update total value cell
+    }
 }
+
 
 const elm = document.getElementById('uploader');
 elm.addEventListener('change', recognize);
