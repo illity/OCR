@@ -176,7 +176,7 @@ function createTable(objects) {
     // Create table rows
     for (var i = 0; i < objects.length; i++) {
         var row = table.insertRow();
-        var isExcluded = objects[i].name.includes("CARREFOUR") || objects[i].name.includes("DONA");
+        var isExcluded = objects[i].name.includes("CARREFOUR") || objects[i].name.includes("DONA") || objects[i].name.includes("Disponi");
 
         for (var key in objects[i]) {
             if (objects[i].hasOwnProperty(key)) {
